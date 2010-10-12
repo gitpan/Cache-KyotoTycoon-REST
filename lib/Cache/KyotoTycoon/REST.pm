@@ -2,7 +2,7 @@ package Cache::KyotoTycoon::REST;
 use strict;
 use warnings;
 use 5.00800;
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 use URI::Escape ();
 
 use WWW::Curl::Easy;
@@ -13,6 +13,7 @@ sub new {
 
     my $agent = $args{agent} || "$class/$VERSION";
     my $timeout = $args{timeout} || 5;
+    my $db = $args{db};
 
     my $curl = WWW::Curl::Easy->new();
     $curl->setopt(CURLOPT_TIMEOUT, $timeout);
@@ -22,6 +23,7 @@ sub new {
     my $host = $args{host} || '127.0.0.1';
     my $port = $args{port} || 1978;
     my $base = "http://${host}:${port}/";
+    $base .= URI::Escape::uri_escape($db) . '/' if defined($db);
     bless {
         curl         => $curl,
         base         => $base,
@@ -47,24 +49,11 @@ sub get {
     my $response_content = '';
     open(my $fh, ">", \$response_content) or die "cannot open buffer";
     $curl->setopt(CURLOPT_WRITEDATA, $fh);
-    my $xt;
-    if (wantarray) {
-        $curl->setopt( CURLOPT_HEADERFUNCTION,
-            sub {
-                $xt          = $1 if $_[0] =~ m{^X-Kt-Xt\s*:\s*(.+)\015\012$};
-                return length( $_[0] );
-            }
-        );
-    }
     my $retcode = $curl->perform();
     if ($retcode == 0) {
         my $code = $curl->getinfo(CURLINFO_HTTP_CODE);
         if ($code eq 200) {
-            if (wantarray) {
-                return ($response_content, $xt || '');
-            } else {
-                return $response_content;
-            }
+            return $response_content;
         } elsif ($code eq 404) {
             return; # not found
         } else {
@@ -214,6 +203,10 @@ Cache::KyotoTycoon::REST is client library for KyotoTycoon RESTful API.
 
 =item timeout
 
+=item db
+
+Database name or number.
+
 =back
 
 =head1 METHODS
@@ -221,8 +214,6 @@ Cache::KyotoTycoon::REST is client library for KyotoTycoon RESTful API.
 =over 4
 
 =item my $val = $kt->get($key);
-
-=item my ($val, $expires) = $kt->get($key);
 
 Retrieve the value for a I<$key>.  I<$key> should be a scalar.
 
