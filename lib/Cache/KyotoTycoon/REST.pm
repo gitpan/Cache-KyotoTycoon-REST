@@ -2,7 +2,7 @@ package Cache::KyotoTycoon::REST;
 use strict;
 use warnings;
 use 5.00800;
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 use URI::Escape ();
 
 use WWW::Curl::Easy;
@@ -47,15 +47,15 @@ sub get {
     my $response_content = '';
     open(my $fh, ">", \$response_content) or die "cannot open buffer";
     $curl->setopt(CURLOPT_WRITEDATA, $fh);
-    my $status_line;
     my $xt;
-    $curl->setopt( CURLOPT_HEADERFUNCTION,
-        sub {
-            $status_line = $1 if $_[0] =~ m{^HTTP/1\.1 (.+)\015\012$};
-            $xt          = $1 if $_[0] =~ m{^X-Kt-Xt\s*:\s*(.+)\015\012$};
-            return length( $_[0] );
-        }
-    );
+    if (wantarray) {
+        $curl->setopt( CURLOPT_HEADERFUNCTION,
+            sub {
+                $xt          = $1 if $_[0] =~ m{^X-Kt-Xt\s*:\s*(.+)\015\012$};
+                return length( $_[0] );
+            }
+        );
+    }
     my $retcode = $curl->perform();
     if ($retcode == 0) {
         my $code = $curl->getinfo(CURLINFO_HTTP_CODE);
@@ -68,7 +68,7 @@ sub get {
         } elsif ($code eq 404) {
             return; # not found
         } else {
-            die "unknown status code: $status_line";
+            die "unknown status code: $code";
         }
     } else {
         die $curl->strerror($retcode);
@@ -91,14 +91,10 @@ sub head {
     $curl->setopt( CURLOPT_CUSTOMREQUEST, "HEAD" );
     $curl->setopt( CURLOPT_POSTFIELDS,    '' );
     $curl->setopt( CURLOPT_HEADER,        0 );
-    my $response_content = '';
-    open( my $fh, ">", \$response_content ) or die "cannot open buffer";
-    $curl->setopt( CURLOPT_WRITEDATA, $fh );
+    $curl->setopt( CURLOPT_WRITEDATA, undef );
     my $xt;
-    my $status_line;
     $curl->setopt( CURLOPT_HEADERFUNCTION,
         sub {
-            $status_line = $1 if $_[0] =~ m{^HTTP/1\.1 (.+)\015\012$};
             $xt          = $1 if $_[0] =~ m{^X-Kt-Xt\s*:\s*(.+)\015\012$};
             return length( $_[0] );
         }
@@ -134,12 +130,9 @@ sub put {
     $curl->setopt( CURLOPT_NOBODY, 0 );
     $curl->setopt( CURLOPT_HTTPHEADER,    \@headers );
     $curl->setopt( CURLOPT_CUSTOMREQUEST, "PUT" );
-    my $response_content = '';
-    open( my $fh, ">", \$response_content ) or die "cannot open buffer";
     $curl->setopt( CURLOPT_POSTFIELDS, $val );
-    $curl->setopt( CURLOPT_WRITEDATA,  $fh );
-    my $status_line;
-    $curl->setopt( CURLOPT_HEADERFUNCTION, sub { length( $_[0] ) } );
+    $curl->setopt( CURLOPT_WRITEDATA,  undef );
+    $curl->setopt( CURLOPT_HEADERFUNCTION, undef );
 
     my $retcode = $curl->perform();
     if ( $retcode == 0 ) {
@@ -172,10 +165,8 @@ sub delete {
     $curl->setopt( CURLOPT_NOBODY, 1 );
     $curl->setopt( CURLOPT_POSTFIELDS,    '' );
     $curl->setopt( CURLOPT_HEADER,        0 );
-    my $response_content = '';
-    open( my $fh, ">", \$response_content ) or die "cannot open buffer";
-    $curl->setopt( CURLOPT_WRITEDATA, $fh );
-    $curl->setopt( CURLOPT_HEADERFUNCTION, sub { length( $_[0] ) } );
+    $curl->setopt( CURLOPT_WRITEDATA, undef );
+    $curl->setopt( CURLOPT_HEADERFUNCTION, undef );
     my $retcode = $curl->perform();
     if ($retcode == 0) {
         my $code = $curl->getinfo(CURLINFO_HTTP_CODE);
